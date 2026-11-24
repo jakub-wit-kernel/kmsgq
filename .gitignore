@@ -1,0 +1,16 @@
+# kbuild outputs
+*.o
+*.ko
+*.mod
+*.mod.c
+*.cmd
+.*.cmd
+.*.d
+modules.order
+Module.symvers
+.tmp_versions/
+# user-space builds
+tests/build/
+# editors
+.vscode/*
+!.vscode/settings.json
