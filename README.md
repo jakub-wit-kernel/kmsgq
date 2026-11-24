@@ -162,6 +162,11 @@ between the two shows where time goes. Device numbers depend heavily on the
 CPU, kernel configuration and mitigations, so compare runs on one machine
 only.
 
+For a rough sense of scale: in quick-mode runs on GitHub-hosted runners
+(Linux 6.8 and 7.0 VMs), throughput was about 2 million messages/s with one
+producer and one consumer, and a 32-byte ping-pong round trip had a median
+of 13-15 µs. [docs/TESTING.md](docs/TESTING.md) has the full table.
+
 ## Design
 
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) covers the requirements, ring

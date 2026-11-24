@@ -25,30 +25,36 @@ suite fail:
 
 What has actually been run, and where:
 
-| Check | Development sandbox (Ubuntu 24.04 userland, no module support) | GitHub Actions | Your WSL2 machine |
-|-------|------|------|------|
-| Unit tests, gcc / clang | ✅ passed | configured | — |
-| Unit tests, ASan+UBSan (gcc) | ✅ passed | configured (gcc + clang) | — |
-| valgrind | ✅ passed | configured | — |
-| clang-tidy | ✅ clean | configured | — |
-| Integration test and benchmarks **compile** (gcc, clang) | ✅ | configured | — |
-| Module **type-checks** against hand-written API stubs (both `class_create` variants) | ✅ (stubs are not kernel headers; this only catches typos and type errors) | — | — |
-| Module builds against real kernel headers | ❌ not possible here | configured, **not yet run** | see [WSL2.md](WSL2.md) |
-| sparse, W=1 | ❌ | configured, **not yet run** | optional |
-| Module load, integration suite, kernel log check | ❌ | configured, **not yet run** | see [WSL2.md](WSL2.md) |
+| Check | Development sandbox (no module support) | GitHub Actions: Ubuntu 22.04, Linux 6.8 (azure) | GitHub Actions: Ubuntu 24.04, Linux 7.0 (azure, PREEMPT) | Your WSL2 machine |
+|-------|------|------|------|------|
+| Unit tests, gcc and clang | ✅ | — | ✅ | not yet |
+| Unit tests, ASan+UBSan | ✅ gcc | — | ✅ gcc + clang | not yet |
+| valgrind | ✅ | — | ✅ | not yet |
+| clang-tidy | ✅ | — | ✅ | — |
+| Module build with `-Werror` against real headers | ❌ no headers | ✅ | ✅ | not yet |
+| `W=1` and sparse, zero findings in our sources | ❌ | ✅ | ✅ | — |
+| Module load and unload | ❌ | ✅ | ✅ | not yet |
+| Integration suite (22 cases) | ❌ | ✅ 22/22 | ✅ 22/22 | not yet |
+| Integration suite under ThreadSanitizer | ❌ | ✅ 22/22 | ✅ 22/22 | — |
+| No kernel BUG/WARNING/Oops after the test's start marker | ❌ | ✅ | ✅ | not yet |
 
-Update this table after the first CI run and after your first WSL2 run.
+The first CI run passed every module and integration step on both kernels.
+The only failure was ThreadSanitizer reporting a data race in the test
+program itself: a shared static buffer in `dev_path()`. That was fixed in a
+follow-up commit, and every job has passed since.
 
-### Known CI risk
+### Benchmark snapshot (CI, quick mode)
 
-The kernel job assumes GitHub's hosted Ubuntu runners let `insmod` load an
-unsigned out-of-tree module. If the runner kernel enforces module signature
-verification, the load step fails with `Key was rejected by service`. The
-build, W=1 and sparse steps still give a useful signal in that case.
+These are single `bench_dev --quick` runs on shared GitHub-hosted VMs,
+20,000 messages per size. Use them as rough reference points, not as a
+characterisation of the driver.
 
-The fallback is to boot a throwaway VM inside CI with
-[virtme-ng](https://github.com/arighi/virtme-ng). Hosted Linux runners expose
-`/dev/kvm`, which virtme-ng can usually use.
+| Message size | Linux 6.8 msgs/s | Linux 7.0 msgs/s |
+|---|---|---|
+| 16 B | 2.00 M | 2.18 M |
+| 256 B | 2.11 M | 2.42 M |
+| 4096 B | 1.85 M (7.6 GB/s) | 2.06 M (8.5 GB/s) |
+| 32 B ping-pong RTT p50 / p99 | 14.7 / 20.6 µs | 13.0 / 18.6 µs |
 
 ## Running individual cases
 
