@@ -98,7 +98,7 @@ static short revents(int fd, short events, int timeout_ms)
 
 	if (n < 0)
 		KT_FAIL("poll: %s", strerror(errno));
-	return n ? p.revents : 0;
+	return n ? p.revents : (short)0;
 }
 
 /* Fill the queue with non-blocking writes of @len bytes; return count. */
@@ -239,7 +239,7 @@ KT_TEST(unknown_ioctl_is_enotty)
 KT_TEST(bad_user_pointer_is_efault_and_atomic)
 {
 	int fd = open_clean(0, O_RDWR | O_NONBLOCK);
-	void *bad = (void *)(uintptr_t)8;	/* never mapped */
+	void *bad = (void *)(uintptr_t)8; /* never mapped */ /* NOLINT(performance-no-int-to-ptr) */
 	__u32 len = 0;
 	char buf[16];
 
@@ -687,7 +687,7 @@ static void run_stress(uint32_t nprod, uint32_t ncons, int ordered)
 	struct kmsgq_info info = info_of(fd);
 	struct stress s = {
 		.dev = 0, .nprod = nprod, .ncons = ncons,
-		.n = env ? (uint32_t)atol(env) : 20000,
+		.n = env ? (uint32_t)strtoul(env, NULL, 10) : 20000,
 		.ordered = ordered,
 		.err_lock = PTHREAD_MUTEX_INITIALIZER,
 	};

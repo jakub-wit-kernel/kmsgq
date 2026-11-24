@@ -1,0 +1,122 @@
+# SPDX-License-Identifier: GPL-2.0
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  userspace:
+    name: Unit tests (${{ matrix.cc }}${{ matrix.san && format(', {0}', matrix.san) || '' }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang]
+        san: ["", "address,undefined"]
+    steps:
+      - uses: actions/checkout@v4
+      # Ubuntu 24.04 kernels use 32 bits of mmap ASLR, which some sanitizer
+      # runtimes cannot handle. 28 is the long-standing default.
+      - name: Relax mmap ASLR for sanitizers
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+      - name: Build tests and benchmarks
+        run: make -C tests all CC=${{ matrix.cc }} SAN=${{ matrix.san }}
+      - name: Ring unit tests
+        run: make -C tests unit CC=${{ matrix.cc }} SAN=${{ matrix.san }}
+      - name: Ring benchmark (smoke run)
+        if: matrix.san == ''
+        run: ./tests/build/bench_ring --quick
+
+  valgrind:
+    name: Unit tests under valgrind
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y valgrind
+      - run: make -C tests valgrind OPT=-O1
+
+  clang-tidy:
+    name: clang-tidy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y clang-tidy
+      - name: Analyse ring core, tests and benchmarks
+        run: |
+          for f in driver/kmsgq_ring.c tests/unit/test_ring.c \
+                   tests/integration/test_kmsgq.c bench/bench_ring.c \
+                   bench/bench_dev.c; do
+            clang-tidy -quiet "$f" -- -std=gnu11 -D_GNU_SOURCE \
+              -Iinclude/uapi -Idriver -Itests/common
+          done
+
+  kernel:
+    name: Kernel module (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kernel headers and matching compiler
+        run: |
+          uname -a
+          cat /proc/version
+          KCC=$(scripts/kernel-cc.sh)
+          sudo apt-get update
+          sudo apt-get install -y "linux-headers-$(uname -r)" sparse "$KCC"
+          echo "KCC=$KCC" >> "$GITHUB_ENV"
+
+      - name: Build module (warnings are errors)
+        run: make module CC="$KCC"
+
+      - name: Extra warnings (W=1), fail on any in our sources
+        run: |
+          make clean
+          make module CC="$KCC" W=1 KMSGQ_WERROR=0 2>&1 | tee w1.log
+          if grep -E 'driver/[^:]+:[0-9]+:[0-9]+: (warning|error)' w1.log; then
+            exit 1
+          fi
+
+      - name: sparse static analysis, fail on any finding in our sources
+        run: |
+          make clean
+          make sparse CC="$KCC" 2>&1 | tee sparse.log
+          if grep -E 'driver/[^:]+:[0-9]+:[0-9]+: (warning|error)' sparse.log; then
+            exit 1
+          fi
+
+      - name: Rebuild and inspect module
+        run: |
+          make clean
+          make module CC="$KCC"
+          modinfo ./kmsgq.ko
+
+      - name: Load, run integration suite and device benchmark, unload
+        run: sudo CC="$KCC" timeout 900 scripts/run-integration.sh
+
+      # 24.04 runner kernels need lower mmap ASLR entropy for TSan.
+      - name: Integration suite under ThreadSanitizer
+        run: |
+          sudo sysctl -w vm.mmap_rnd_bits=28
+          # The previous step ran as root and left root-owned build files.
+          sudo make -C tests clean
+          make -C tests build/test_kmsgq SAN=thread
+          sudo scripts/load.sh
+          sudo KMSGQ_STRESS_N=5000 timeout 600 ./tests/build/test_kmsgq
+          sudo scripts/unload.sh
+
+      - name: Kernel log
+        if: always()
+        run: sudo dmesg | grep -E 'kmsgq|BUG|WARNING|Oops' | tail -n 100 || true

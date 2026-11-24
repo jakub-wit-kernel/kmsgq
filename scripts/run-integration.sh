@@ -4,6 +4,7 @@
 # Full on-target test: build, load, run the integration suite and a short
 # benchmark, unload, then scan the kernel log for warnings.
 #   sudo scripts/run-integration.sh
+#   sudo KDIR=/path/to/kernel/tree scripts/run-integration.sh   (e.g. WSL2)
 #
 # Exits non-zero if any step fails or the kernel logged a BUG/WARNING/Oops.
 set -euo pipefail
@@ -14,7 +15,7 @@ cd "$(dirname "$0")/.."
 MARK="kmsgq-integration-$$-$(date +%s)"
 echo "$MARK" > /dev/kmsg
 
-make -s module ${CC:+CC="$CC"}
+make -s module ${CC:+CC="$CC"} ${KDIR:+KDIR="$KDIR"}
 make -s -C tests build/test_kmsgq build/bench_dev
 scripts/load.sh nr_devs=4 capacity=65536 max_msg=4096
 

@@ -37,7 +37,7 @@ static double now_ns(void)
 int main(int argc, char **argv)
 {
 	static const size_t sizes[] = { 16, 64, 256, 1024, 4096 };
-	const size_t cap = 64 * 1024;
+	const size_t cap = (size_t)64 * 1024;
 	int quick = argc > 1 && strcmp(argv[1], "--quick") == 0;
 	long iters = quick ? 200000 : 5000000;
 	uint8_t *storage = malloc(cap), in[4096], out[4096];

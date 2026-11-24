@@ -61,10 +61,15 @@ extern int kt_skipped;
 		errno = 0;						\
 		long kt_r_ = (long)(call);				\
 		int kt_e_ = errno;					\
-		if (kt_r_ != -1 || kt_e_ != (err))			\
+		if (kt_r_ != -1 || kt_e_ != (err)) {			\
+			/* strerror() may reuse one buffer: copy first. */ \
+			char kt_want_[64];				\
+			snprintf(kt_want_, sizeof(kt_want_), "%s",	\
+				 strerror(err));			\
 			KT_FAIL("%s: expected -1/%s, got %ld/%s",	\
-				#call, strerror(err), kt_r_,		\
+				#call, kt_want_, kt_r_,			\
 				strerror(kt_e_));			\
+		}							\
 	} while (0)
 
 /* Assert a syscall-style call does not return -1. */

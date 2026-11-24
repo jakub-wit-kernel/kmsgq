@@ -55,7 +55,7 @@ static long pop(struct kmsgq_ring *r, void *dst, size_t room)
 static void fill_pattern(unsigned char *p, size_t len, unsigned seed)
 {
 	for (size_t i = 0; i < len; i++)
-		p[i] = (unsigned char)(seed * 131u + i * 7u);
+		p[i] = (unsigned char)((size_t)seed * 131u + i * 7u);
 }
 
 /* ---- tests ---------------------------------------------------------- */
@@ -327,7 +327,7 @@ KT_TEST(randomized_against_model)
 	static struct model m;
 	unsigned char in[4096], out[4096];
 	const char *env = getenv("KMSGQ_RANDOM_OPS");
-	long ops = env ? atol(env) : 200000;
+	long ops = env ? strtol(env, NULL, 10) : 200000;
 
 	for (size_t ci = 0; ci < KT_N(caps); ci++) {
 		size_t cap = caps[ci];
