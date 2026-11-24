@@ -33,7 +33,8 @@
 
 static const char *dev_path(int idx)
 {
-	static char path[2][128];
+	/* Per-thread: worker threads call this concurrently via open_raw(). */
+	static _Thread_local char path[2][128];
 	const char *prefix = getenv("KMSGQ_DEV_PREFIX");
 
 	snprintf(path[idx & 1], sizeof(path[0]), "%s%d",
